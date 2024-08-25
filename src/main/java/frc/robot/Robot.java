@@ -7,8 +7,8 @@ package frc.robot;
 import com.ctre.phoenix6.StatusCode;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.NeutralOut;
-import com.ctre.phoenix6.controls.PositionTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.PositionVoltage;
+import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 
 import edu.wpi.first.wpilibj.TimedRobot;
@@ -21,13 +21,13 @@ import edu.wpi.first.wpilibj.XboxController;
  * project.
  */
 public class Robot extends TimedRobot {
-  private final TalonFX m_fx = new TalonFX(20);
+  private final TalonFX my_KrakenX60_Motor = new TalonFX(20);
 
-  /* Be able to switch which control request to use based on a button press */
-  /* Start at position 0, use slot 0 */
+  /* Start at position 0, use slot 0 for those settings */
   private final PositionVoltage m_positionVoltage = new PositionVoltage(0).withSlot(0);
-  /* Start at position 0, use slot 1 */
-  private final PositionTorqueCurrentFOC m_positionTorque = new PositionTorqueCurrentFOC(0).withSlot(1);
+  /* Start at velocity 0, use slot 1 for those settings */
+  private final VelocityVoltage m_velocityVoltage = new VelocityVoltage(0).withSlot(1);
+  
   /* Keep a brake request so we can disable the motor */
   private final NeutralOut m_brake = new NeutralOut();
 
@@ -40,32 +40,44 @@ public class Robot extends TimedRobot {
   @Override
   public void robotInit() {
     TalonFXConfiguration configs = new TalonFXConfiguration();
-    configs.Slot0.kP = 2.4; // An error of 1 rotation results in 2.4 V output
-    configs.Slot0.kI = 0; // No output for integrated error
-    configs.Slot0.kD = 0.1; // A velocity of 1 rps results in 0.1 V output
-    // Peak output of 8 V
+
+    // Common configuration settings that affect the behavior of the motor and control loops
     configs.Voltage.PeakForwardVoltage = 8;
     configs.Voltage.PeakReverseVoltage = -8;
+    configs.ClosedLoopRamps.VoltageClosedLoopRampPeriod = 0.0;
+    configs.CurrentLimits.StatorCurrentLimitEnable = true;    
+    configs.CurrentLimits.StatorCurrentLimit = 120;
+    configs.CurrentLimits.SupplyCurrentLimitEnable = true;    
+    configs.CurrentLimits.SupplyCurrentLimit = 40;
 
-    configs.Slot1.kP = 60; // An error of 1 rotation results in 60 A output
-    configs.Slot1.kI = 0; // No output for integrated error
-    configs.Slot1.kD = 6; // A velocity of 1 rps results in 6 A output
-    // Peak output of 120 A
-    configs.TorqueCurrent.PeakForwardTorqueCurrent = 120;
-    configs.TorqueCurrent.PeakReverseTorqueCurrent = -120;
+    // Configuration settings specific to Slot 0, which is the position control loop in our setup
+    configs.Slot0.kS = 0.1; // To account for friction, add 0.1 V of static feedforward
+    configs.Slot0.kV = 0.12; // Kraken X60 is a 500 kV motor, 500 rpm per V = 8.333 rps per V, 1/8.33 = 0.12 volts / rotation per second
+
+    configs.Slot0.kP = 2.4; // An error of 1 rotation results in 2.4 V output
+    configs.Slot0.kI = 0.0; // No output for integrated error
+    configs.Slot0.kD = 0.1; // A velocity of 1 rps results in 0.1 V output
+
+    // Configuration settings specific to Slot 1, which is the velocity control loop in our setup
+    configs.Slot1.kS = 0.1; // To account for friction, add 0.1 V of static feedforward
+    configs.Slot1.kV = 0.12; // Kraken X60 is a 500 kV motor, 500 rpm per V = 8.333 rps per V, 1/8.33 = 0.12 volts / rotation per second
+
+    configs.Slot1.kP = 0.11; // An error of 1 rotation per second results in 0.11 V output
+    configs.Slot1.kI = 0.0; // No output for integrated error
+    configs.Slot1.kD = 0.0; // No output for derivative error
 
     /* Retry config apply up to 5 times, report if failure */
     StatusCode status = StatusCode.StatusCodeNotInitialized;
     for (int i = 0; i < 5; ++i) {
-      status = m_fx.getConfigurator().apply(configs);
+      status = my_KrakenX60_Motor.getConfigurator().apply(configs);
       if (status.isOK()) break;
     }
     if (!status.isOK()) {
       System.out.println("Could not apply configs, error code: " + status.toString());
     }
 
-    /* Make sure we start at 0 */
-    m_fx.setPosition(0);
+    /* Make sure we start at position 0; this affects */
+    my_KrakenX60_Motor.setPosition(0);
   }
 
   @Override
@@ -88,16 +100,24 @@ public class Robot extends TimedRobot {
       desiredRotations = 0;
     }
 
+    double desiredRotationsPerSecond  = m_joystick.getRightY() * 50; // Go for plus/minus 10 rotations per second
+    if (Math.abs(desiredRotationsPerSecond ) <= 0.1) { // Joystick deadzone
+      desiredRotationsPerSecond  = 0;
+    }
+
     if (m_joystick.getLeftBumper()) {
       /* Use position voltage */
-      m_fx.setControl(m_positionVoltage.withPosition(desiredRotations));
-    } else if (m_joystick.getRightBumper()) {
-      /* Use position torque */
-      m_fx.setControl(m_positionTorque.withPosition(desiredRotations));
-    } else {
-      /* Disable the motor instead */
-      m_fx.setControl(m_brake);
+      my_KrakenX60_Motor.setControl(m_positionVoltage.withPosition(desiredRotations));
     }
+    else if (m_joystick.getRightBumper()) {
+      /* Use velocity voltage */
+      my_KrakenX60_Motor.setControl(m_velocityVoltage.withVelocity(desiredRotationsPerSecond));
+    }
+    else {
+      /* Disable the motor instead */
+      my_KrakenX60_Motor.setControl(m_brake);
+    }
+
   }
 
   @Override
