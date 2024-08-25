@@ -100,7 +100,7 @@ public class Robot extends TimedRobot {
       desiredRotations = 0;
     }
 
-    double desiredRotationsPerSecond  = m_joystick.getRightY() * 50; // Go for plus/minus 10 rotations per second
+    double desiredRotationsPerSecond  = desiredRotations * 5; // Go for plus/minus 10 rotations per second
     if (Math.abs(desiredRotationsPerSecond ) <= 0.1) { // Joystick deadzone
       desiredRotationsPerSecond  = 0;
     }
