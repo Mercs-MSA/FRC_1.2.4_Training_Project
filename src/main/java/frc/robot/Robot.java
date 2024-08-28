@@ -95,12 +95,12 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopPeriodic() {
-    double desiredRotations = m_joystick.getLeftY() * 10; // Go for plus/minus 10 rotations
+    double desiredRotations = m_joystick.getLeftY() * 2; // Go for plus/minus 2 rotations
     if (Math.abs(desiredRotations) <= 0.1) { // Joystick deadzone
       desiredRotations = 0;
     }
 
-    double desiredRotationsPerSecond  = desiredRotations * 5; // Go for plus/minus 10 rotations per second
+    double desiredRotationsPerSecond  = desiredRotations * 4; // Go for plus/minus 4 rotations per second
     if (Math.abs(desiredRotationsPerSecond ) <= 0.1) { // Joystick deadzone
       desiredRotationsPerSecond  = 0;
     }
